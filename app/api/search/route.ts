@@ -11,11 +11,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Here you would integrate with Bhindi's Perplexity agent or OpenRouter
-    // For now, this is a placeholder that returns a structured response
-    
-    // Example: Call Bhindi API or OpenRouter with Perplexity model
-    const bhindiApiKey = process.env.BHINDI_API_KEY;
+    // Use environment variable or fallback to provided key
+    const bhindiApiKey = process.env.BHINDI_API_KEY || 'AIzaSyAHpP_6M_ZQ7M7x5IDCMxt2382zISSmYfE';
     
     if (!bhindiApiKey) {
       return NextResponse.json(
@@ -46,13 +43,14 @@ export async function POST(request: NextRequest) {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to get response from Bhindi API');
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`Bhindi API error: ${response.status} - ${JSON.stringify(errorData)}`);
     }
 
     const data = await response.json();
     
     return NextResponse.json({
-      answer: data.response || data.content || 'No response received',
+      answer: data.response || data.content || data.message || 'No response received',
       sources: data.sources || [],
     });
 
