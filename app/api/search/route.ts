@@ -11,57 +11,61 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use environment variable or fallback to provided key
-    const bhindiApiKey = process.env.BHINDI_API_KEY || 'AIzaSyAHpP_6M_ZQ7M7x5IDCMxt2382zISSmYfE';
+    // Use Google Gemini API with the provided key
+    const googleApiKey = process.env.GOOGLE_API_KEY || 'AIzaSyAHpP_6M_ZQ7M7x5IDCMxt2382zISSmYfE';
     
-    if (!bhindiApiKey) {
-      return NextResponse.json(
-        { 
-          answer: `I received your query: "${query}"\n\nTo enable full AI-powered search capabilities, please add your BHINDI_API_KEY to the environment variables.\n\nOnce configured, I'll be able to:\n- Search the web in real-time\n- Provide comprehensive answers with sources\n- Reason through complex queries\n- Cite reliable sources`,
-          sources: []
+    // Make request to Google Gemini API
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${googleApiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        { status: 200 }
-      );
-    }
-
-    // Make request to Bhindi API with Perplexity agent
-    const response = await fetch('https://api.bhindi.io/v1/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${bhindiApiKey}`,
-      },
-      body: JSON.stringify({
-        messages: [
-          {
-            role: 'user',
-            content: query
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: `You are a helpful AI assistant similar to Perplexity AI. Answer the following question comprehensively and provide relevant information:\n\n${query}`
+                }
+              ]
+            }
+          ],
+          generationConfig: {
+            temperature: 0.7,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 2048,
           }
-        ],
-        agents: ['perplexity'], // Use Perplexity agent
-      }),
-    });
+        }),
+      }
+    );
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(`Bhindi API error: ${response.status} - ${JSON.stringify(errorData)}`);
+      console.error('Google API error:', errorData);
+      throw new Error(`Google API error: ${response.status}`);
     }
 
     const data = await response.json();
     
+    // Extract the generated text from Gemini response
+    const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated';
+    
     return NextResponse.json({
-      answer: data.response || data.content || data.message || 'No response received',
-      sources: data.sources || [],
+      answer: generatedText,
+      sources: ['Powered by Google Gemini AI'],
     });
 
   } catch (error) {
     console.error('Search API Error:', error);
     return NextResponse.json(
       { 
-        error: 'Failed to process search query',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        answer: `I encountered an error processing your request. ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease make sure the API key is valid and has the necessary permissions.`,
+        sources: []
       },
-      { status: 500 }
+      { status: 200 }
     );
   }
 }
