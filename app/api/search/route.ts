@@ -11,58 +11,64 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use Google Gemini API with the provided key
-    const googleApiKey = process.env.GOOGLE_API_KEY || 'AIzaSyAHpP_6M_ZQ7M7x5IDCMxt2382zISSmYfE';
+    // Use OpenAI API key from environment
+    const openaiApiKey = process.env.OPENAI_API_KEY;
     
-    // Make request to Google Gemini API
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${googleApiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+    if (!openaiApiKey) {
+      return NextResponse.json(
+        { 
+          answer: `I received your query: "${query}"\n\nTo enable full AI-powered search capabilities, please add your OPENAI_API_KEY to the environment variables in Vercel.\n\nOnce configured, I'll be able to:\n- Provide intelligent answers using GPT-4\n- Search and reason through complex queries\n- Give comprehensive responses with context\n- Cite relevant information`,
+          sources: []
         },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: `You are a helpful AI assistant similar to Perplexity AI. Answer the following question comprehensively and provide relevant information:\n\n${query}`
-                }
-              ]
-            }
-          ],
-          generationConfig: {
-            temperature: 0.7,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 2048,
+        { status: 200 }
+      );
+    }
+
+    // Make request to OpenAI API
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openaiApiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful AI assistant similar to Perplexity AI. Provide comprehensive, well-researched answers with relevant context. Format your responses in markdown for better readability.'
+          },
+          {
+            role: 'user',
+            content: query
           }
-        }),
-      }
-    );
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+      }),
+    });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('Google API error:', errorData);
-      throw new Error(`Google API error: ${response.status}`);
+      console.error('OpenAI API error:', errorData);
+      throw new Error(`OpenAI API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
     }
 
     const data = await response.json();
     
-    // Extract the generated text from Gemini response
-    const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated';
+    // Extract the generated text from OpenAI response
+    const generatedText = data.choices?.[0]?.message?.content || 'No response generated';
     
     return NextResponse.json({
       answer: generatedText,
-      sources: ['Powered by Google Gemini AI'],
+      sources: ['Powered by OpenAI GPT-4'],
     });
 
   } catch (error) {
     console.error('Search API Error:', error);
     return NextResponse.json(
       { 
-        answer: `I encountered an error processing your request. ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease make sure the API key is valid and has the necessary permissions.`,
+        answer: `I encountered an error processing your request.\n\n**Error:** ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease make sure:\n- Your OpenAI API key is valid\n- You have sufficient credits in your OpenAI account\n- The API key has the necessary permissions`,
         sources: []
       },
       { status: 200 }
